@@ -1,0 +1,30 @@
+<div class="shell">
+  <aside class="sidebar" aria-label="Angular 21 demos">
+    <a class="brand" routerLink="/signal-forms" aria-label="Angular 21 demos home">
+      <span class="brand-mark">21</span>
+      <span>
+        <strong>Angular 21 Lab</strong>
+        <small>APIs modernas sin CLI global</small>
+      </span>
+    </a>
+
+    <nav class="nav" aria-label="Demos">
+      <a routerLink="/signal-forms" routerLinkActive="active">Signal Forms</a>
+      <a routerLink="/compat-forms" routerLinkActive="active">Compat Forms</a>
+      <a routerLink="/resources" routerLinkActive="active">Resources</a>
+      <a routerLink="/view-transitions" routerLinkActive="active">View Transitions</a>
+      <a routerLink="/async-validation" routerLinkActive="active">Async Validation</a>
+      <a routerLink="/rx-resource" routerLinkActive="active">rxResource</a>
+      <a routerLink="/signals" routerLinkActive="active">Signals</a>
+      <a routerLink="/zoneless" routerLinkActive="active">Zoneless</a>
+      <a routerLink="/angular-aria" routerLinkActive="active">Angular Aria</a>
+      <a routerLink="/defer" routerLinkActive="active">&#64;defer</a>
+      <a routerLink="/render-hooks" routerLinkActive="active">Render Hooks</a>
+      <a routerLink="/interceptors" routerLinkActive="active">Interceptors</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <router-outlet />
+  </main>
+</div>
