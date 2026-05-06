@@ -5,13 +5,17 @@ import {
   email,
   form,
   FormField,
+  FormRoot,
   maxLength,
   min,
   minLength,
   required,
+  submit,
 } from '@angular/forms/signals';
+import type { FieldTree, TreeValidationResult } from '@angular/forms/signals';
 
 type Plan = 'starter' | 'team' | 'enterprise';
+type BackendMode = 'success' | 'field-errors';
 
 interface SignupModel {
   profile: {
@@ -39,7 +43,7 @@ const initialSignupModel: SignupModel = {
 
 @Component({
   selector: 'app-signal-forms-demo',
-  imports: [FormField, JsonPipe],
+  imports: [FormField, FormRoot, JsonPipe],
   template: `
     <section class="demo-page">
       <header class="page-header">
@@ -53,7 +57,7 @@ const initialSignupModel: SignupModel = {
       </header>
 
       <div class="demo-grid">
-        <form class="panel form-panel" (submit)="save($event)">
+        <form class="panel form-panel" [formRoot]="signupForm">
           <div class="field-row two">
             <label>
               Nombre
@@ -99,6 +103,27 @@ const initialSignupModel: SignupModel = {
             <textarea rows="4" [formField]="signupForm.notes"></textarea>
           </label>
 
+          <fieldset>
+            <legend>Respuesta simulada del backend</legend>
+
+            <div class="segmented" aria-label="Modo del backend">
+              <button
+                type="button"
+                [class.active]="backendMode() === 'success'"
+                (click)="backendMode.set('success')"
+              >
+                OK
+              </button>
+              <button
+                type="button"
+                [class.active]="backendMode() === 'field-errors'"
+                (click)="backendMode.set('field-errors')"
+              >
+                Errores por campo
+              </button>
+            </div>
+          </fieldset>
+
           <div class="actions">
             <button type="button" class="secondary" (click)="loadExample()">Cargar ejemplo</button>
             <button type="button" class="secondary" (click)="clearVat()">Quitar factura</button>
@@ -108,7 +133,12 @@ const initialSignupModel: SignupModel = {
             <button type="button" class="secondary" (click)="resetModelAndState()">
               Reset modelo
             </button>
-            <button type="submit" [disabled]="signupForm().invalid()">Guardar</button>
+            <button type="button" class="secondary" (click)="submitWithFunction()">
+              submit()
+            </button>
+            <button type="submit" [disabled]="signupForm().submitting()">
+              {{ signupForm().submitting() ? 'Enviando...' : 'Enviar FormRoot' }}
+            </button>
           </div>
         </form>
 
@@ -132,6 +162,10 @@ const initialSignupModel: SignupModel = {
               <dt>Total mensual</dt>
               <dd>{{ monthlyEstimate() }}</dd>
             </div>
+            <div>
+              <dt>Submitting</dt>
+              <dd>{{ signupForm().submitting() ? 'si' : 'no' }}</dd>
+            </div>
           </dl>
 
           <h3>Errores activos</h3>
@@ -148,6 +182,9 @@ const initialSignupModel: SignupModel = {
 
           <h3>Reset en Signal Forms</h3>
           <pre>{{ resetExample }}</pre>
+
+          <h3>Submit + TreeValidationResult</h3>
+          <pre>{{ submitExample }}</pre>
         </aside>
       </div>
     </section>
@@ -157,6 +194,7 @@ const initialSignupModel: SignupModel = {
 })
 export class SignalFormsDemo {
   readonly signupModel = signal<SignupModel>(structuredClone(initialSignupModel));
+  readonly backendMode = signal<BackendMode>('field-errors');
 
   readonly resetExample = `// Solo limpia dirty/touched; NO cambia valores
 this.signupForm().reset();
@@ -168,25 +206,52 @@ this.signupForm().reset(initialSignupModel);
 this.signupModel.set(structuredClone(initialSignupModel));
 this.signupForm().reset();`;
 
-  readonly signupForm = form(this.signupModel, (path) => {
-    required(path.profile.name, { message: 'El nombre es obligatorio.' });
-    minLength(path.profile.name, 2, { message: 'Usa al menos 2 caracteres.' });
+  readonly submitExample = `readonly signupForm = form(this.signupModel, schema, {
+  submission: {
+    action: async (_form, { submitted }) => {
+      const response = await api.createSignup(submitted().value());
 
-    required(path.profile.email, { message: 'El email es obligatorio.' });
-    email(path.profile.email, { message: 'Usa un email valido.' });
+      // Si devuelves TreeValidationResult, Angular lo integra en errors().
+      return response.errors.map((error) => ({
+        kind: 'server',
+        message: error.message,
+        fieldTree: submitted.profile.email,
+      }));
+    },
+    onInvalid: () => console.log('No se llama al backend si hay errores locales'),
+  },
+});
 
-    min(path.seats, 1, { message: 'Debe haber al menos un puesto.' });
-    maxLength(path.notes, 180, { message: 'Las notas no deben superar 180 caracteres.' });
+// Tambien puedes dispararlo tu mismo.
+const ok = await submit(this.signupForm);`;
 
-    applyWhen(
-      path,
-      ({ valueOf }) => valueOf(path.wantsInvoice),
-      (invoicePath) => {
-        required(invoicePath.vatId, { message: 'El VAT es obligatorio si pides factura.' });
-        minLength(invoicePath.vatId, 6, { message: 'El VAT debe tener al menos 6 caracteres.' });
+  readonly signupForm = form(
+    this.signupModel,
+    (path) => {
+      required(path.profile.name, { message: 'El nombre es obligatorio.' });
+      minLength(path.profile.name, 2, { message: 'Usa al menos 2 caracteres.' });
+
+      required(path.profile.email, { message: 'El email es obligatorio.' });
+      email(path.profile.email, { message: 'Usa un email valido.' });
+
+      min(path.seats, 1, { message: 'Debe haber al menos un puesto.' });
+      maxLength(path.notes, 180, { message: 'Las notas no deben superar 180 caracteres.' });
+
+      applyWhen(
+        path,
+        ({ valueOf }) => valueOf(path.wantsInvoice),
+        (invoicePath) => {
+          required(invoicePath.vatId, { message: 'El VAT es obligatorio si pides factura.' });
+          minLength(invoicePath.vatId, 6, { message: 'El VAT debe tener al menos 6 caracteres.' });
+        },
+      );
+    },
+    {
+      submission: {
+        action: async (root) => this.createSignupOnServer(root),
       },
-    );
-  });
+    },
+  );
 
   readonly monthlyEstimate = computed(() => {
     const baseByPlan: Record<Plan, number> = {
@@ -248,7 +313,32 @@ this.signupForm().reset();`;
     this.signupForm().reset(structuredClone(initialSignupModel));
   }
 
-  save(event: SubmitEvent) {
-    event.preventDefault();
+  async submitWithFunction() {
+    await submit(this.signupForm);
+  }
+
+  private async createSignupOnServer(
+    submitted: FieldTree<SignupModel>,
+  ): Promise<TreeValidationResult> {
+    await new Promise((resolve) => setTimeout(resolve, 650));
+
+    if (this.backendMode() === 'success') {
+      return undefined;
+    }
+
+    const backendErrors: TreeValidationResult = [
+      {
+        fieldTree: submitted.profile.email,
+        kind: 'email-taken',
+        message: 'Backend: este email ya existe.',
+      },
+      {
+        fieldTree: submitted.seats,
+        kind: 'plan-seat-limit',
+        message: 'Backend: el plan seleccionado no permite esa cantidad de puestos.',
+      },
+    ];
+
+    return backendErrors;
   }
 }
